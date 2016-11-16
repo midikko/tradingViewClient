@@ -21,21 +21,28 @@ public class Client  extends Thread{
     public void run() {
         config();
         try (Socket socket = new Socket(address, portNumber);){
-            socket.setSoTimeout(5000);
+            socket.setSoTimeout(1000);
             serverSocketReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             serverSocketWriter = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
             readIntro();
             while(isOnline){
                 switch (getNextCommand()){
                     case 1 : {
-                        readAndPrintFilesList();
+                        if(checkServerState()){
+                            readAndPrintFilesList();
+                        }
                     } break;
                     case 2 : {
-                        downloadFile(socket.getInputStream());
+                        if(checkServerState()){
+                            downloadFile(socket.getInputStream());
+                        }
+
                     } break;
                     case 3 : {
-                        isOnline=false;
-                        sayBye();
+                        if(checkServerState()){
+                            isOnline=false;
+                            sayBye();
+                        }
                     }
                 }
             }
@@ -86,6 +93,7 @@ public class Client  extends Thread{
             }
         }catch (SocketTimeoutException e){
             System.out.println("Сервер не отвечает");
+            isOnline=false;
         }
 
     }
@@ -128,5 +136,21 @@ public class Client  extends Thread{
         }catch (SocketTimeoutException e){
             System.out.println("Сервер не отвечает");
         }
+    }
+
+    public boolean checkServerState(){
+        try{
+            String flag = serverSocketReader.readLine();
+            if(flag.equalsIgnoreCase("-1")){
+                System.out.println("Сервер завершает работу");
+                isOnline=false;
+                return false;
+            }
+        } catch (SocketTimeoutException e){
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return true;
     }
 }
