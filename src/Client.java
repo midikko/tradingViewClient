@@ -11,8 +11,8 @@ public class Client  extends Thread{
     private String address;
     private int portNumber;
     private String pathToFiles;
-    private BufferedReader reader;
-    private BufferedWriter writer;
+    private BufferedReader serverSocketReader;
+    private PrintWriter serverSocketWriter;
     private boolean isOnline = true;
     private List<String> files;
 
@@ -20,8 +20,8 @@ public class Client  extends Thread{
     public void run() {
         config();
         try (Socket socket = new Socket(address, portNumber);){
-            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            serverSocketReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            serverSocketWriter = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
             readIntro();
             while(isOnline){
                 switch (getNextCommand()){
@@ -44,41 +44,41 @@ public class Client  extends Thread{
     }
 
     private void sayBye() throws IOException {
-        writer.write("3");
-        writer.newLine();
-        writer.flush();
+        serverSocketWriter.println("3");
+        serverSocketWriter.flush();
     }
 
     private void downloadFile(InputStream stream) throws IOException {
+        serverSocketWriter.println("2");
+        serverSocketWriter.flush();
         System.out.println("Укажите номер файла");
-        BufferedReader bufferRead = new BufferedReader(new InputStreamReader(System.in));
-        int fileNum = Integer.parseInt(bufferRead.readLine());
-        writer.write("2");
-        writer.newLine();
-        writer.flush();
-        writer.write(files.get(fileNum));
-        writer.newLine();
-        writer.flush();
+        int fileNum = Integer.parseInt(Main.consoleReader.readLine());
+        serverSocketWriter.println(files.get(fileNum));
+        serverSocketWriter.flush();
         saveFile(fileNum,stream);
     }
 
     private void saveFile(int fileIndex,InputStream stream) throws IOException {
-        FileOutputStream fos = new FileOutputStream(pathToFiles + File.separator + files.get(fileIndex));
         byte[] buffer = new byte[1024];
-        int count = stream.read(buffer);
-        fos.write(buffer, 0, count);
-        fos.flush();
-        while ((count = stream.read(buffer,0,stream.available()>buffer.length?buffer.length:stream.available())) > 0) {
+        try(FileOutputStream fos = new FileOutputStream(pathToFiles + File.separator + files.get(fileIndex));){
+            int count = stream.read(buffer);
             fos.write(buffer, 0, count);
             fos.flush();
+            while ((count = stream.read(buffer,0,stream.available()>buffer.length?buffer.length:stream.available())) > 0) {
+                fos.write(buffer, 0, count);
+                fos.flush();
+            }
         }
-        fos.close();
         System.out.println("Мы скачали файл.");
     }
 
     private void readIntro() throws IOException {
-        String hello = reader.readLine();
-        System.out.println(hello);
+        String hello = serverSocketReader.readLine();
+        if(hello.equalsIgnoreCase("-1")){
+            System.out.println("Сервер выключается и в данный моент не доступен.");
+        }else{
+            System.out.println(hello);
+        }
     }
 
     private int getNextCommand() throws IOException {
@@ -107,10 +107,9 @@ public class Client  extends Thread{
     }
 
     private void readAndPrintFilesList() throws IOException {
-        writer.write("1");
-        writer.newLine();
-        writer.flush();
-        List<String> list = Arrays.asList(reader.readLine().split(","));
+        serverSocketWriter.println("1");
+        serverSocketWriter.flush();
+        List<String> list = Arrays.asList(serverSocketReader.readLine().split(","));
         files=list;
         for(int i = 0 ; i<list.size();i++){
             System.out.println(i+ " " + list.get(i));
