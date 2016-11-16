@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -20,6 +21,7 @@ public class Client  extends Thread{
     public void run() {
         config();
         try (Socket socket = new Socket(address, portNumber);){
+            socket.setSoTimeout(5000);
             serverSocketReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             serverSocketWriter = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
             readIntro();
@@ -61,24 +63,31 @@ public class Client  extends Thread{
     private void saveFile(int fileIndex,InputStream stream) throws IOException {
         byte[] buffer = new byte[1024];
         try(FileOutputStream fos = new FileOutputStream(pathToFiles + File.separator + files.get(fileIndex));){
-            int count = stream.read(buffer);
-            fos.write(buffer, 0, count);
-            fos.flush();
-            while ((count = stream.read(buffer,0,stream.available()>buffer.length?buffer.length:stream.available())) > 0) {
-                fos.write(buffer, 0, count);
-                fos.flush();
+            int count;
+            InputStream in = stream;
+            try{
+                while ((count = in.read(buffer)) > 0) {
+                    fos.write(buffer, 0, count);
+                    fos.flush();
+                }
+            }catch (SocketTimeoutException e){
+                System.out.println("Мы скачали файл.");
             }
         }
-        System.out.println("Мы скачали файл.");
     }
 
     private void readIntro() throws IOException {
-        String hello = serverSocketReader.readLine();
-        if(hello.equalsIgnoreCase("-1")){
-            System.out.println("Сервер выключается и в данный моент не доступен.");
-        }else{
-            System.out.println(hello);
+        try{
+            String hello = serverSocketReader.readLine();
+            if(hello.equalsIgnoreCase("-1")){
+                System.out.println("Сервер выключается и в данный моент не доступен.");
+            }else{
+                System.out.println(hello);
+            }
+        }catch (SocketTimeoutException e){
+            System.out.println("Сервер не отвечает");
         }
+
     }
 
     private int getNextCommand() throws IOException {
@@ -109,10 +118,15 @@ public class Client  extends Thread{
     private void readAndPrintFilesList() throws IOException {
         serverSocketWriter.println("1");
         serverSocketWriter.flush();
-        List<String> list = Arrays.asList(serverSocketReader.readLine().split(","));
-        files=list;
-        for(int i = 0 ; i<list.size();i++){
-            System.out.println(i+ " " + list.get(i));
+        try{
+            String filesString = serverSocketReader.readLine();
+            List<String> list = Arrays.asList(filesString.split(","));
+            files=list;
+            for(int i = 0 ; i<list.size();i++){
+                System.out.println(i+ " " + list.get(i));
+            }
+        }catch (SocketTimeoutException e){
+            System.out.println("Сервер не отвечает");
         }
     }
 }
